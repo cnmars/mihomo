@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -72,6 +73,22 @@ func NewLulutls(option LulutlsOption) (*Lulutls, error) {
 	}
 	addr := net.JoinHostPort(option.Server, fmt.Sprint(option.Port))
 
+	base := NewBase(BaseOption{
+		Name:         option.Name,
+		Addr:         addr,
+		Type:         C.Lulutls,
+		ProviderName: option.ProviderName,
+		UDP:          option.UDP,
+		TFO:          option.TFO,
+		MPTCP:        option.MPTCP,
+		Interface:    option.Interface,
+		RoutingMark:  option.RoutingMark,
+		Prefer:       option.IPVersion,
+	})
+	// mihomo panics if net.DefaultResolver is used (main.go installs a trap), so
+	// every DNS lookup must go through mihomo's own dialer/resolver.
+	cDialer := option.NewDialer(base.DialOptions())
+
 	d, err := lclient.NewDialer(lclient.Config{
 		Server:      addr,
 		SNI:         option.SNI,
@@ -84,24 +101,19 @@ func NewLulutls(option LulutlsOption) (*Lulutls, error) {
 		Fingerprint: option.Fingerprint,
 		Arith:       option.Codec == "arith",
 		Insecure:    option.Insecure,
+		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return cDialer.DialContext(ctx, network, addr)
+		},
+		ListenPacket: func(ctx context.Context) (net.PacketConn, error) {
+			return cDialer.ListenPacket(ctx, "udp", "", netip.AddrPort{})
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("lulutls: %w", err)
 	}
 
 	return &Lulutls{
-		Base: NewBase(BaseOption{
-			Name:         option.Name,
-			Addr:         addr,
-			Type:         C.Lulutls,
-			ProviderName: option.ProviderName,
-			UDP:          option.UDP,
-			TFO:          option.TFO,
-			MPTCP:        option.MPTCP,
-			Interface:    option.Interface,
-			RoutingMark:  option.RoutingMark,
-			Prefer:       option.IPVersion,
-		}),
+		Base:   base,
 		option: &option,
 		dialer: d,
 	}, nil
