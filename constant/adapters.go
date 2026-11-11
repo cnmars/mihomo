@@ -46,6 +46,7 @@ const (
 	Mieru
 	AnyTLS
 	Sudoku
+	Lulutls
 	Masque
 	TrustTunnel
 	OpenVPN
@@ -221,6 +222,8 @@ func (at AdapterType) String() string {
 		return "AnyTLS"
 	case Sudoku:
 		return "Sudoku"
+	case Lulutls:
+		return "Lulutls"
 	case Masque:
 		return "Masque"
 	case TrustTunnel:
